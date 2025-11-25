@@ -1,0 +1,38 @@
+# create a list
+budget = []
+# Example to add items to the list
+# budget = [ {"date":"2023-01-01", "type :"income", "amount":1000, "description":"Salary"}
+#         , {"date":"2023-01-02", "type":"expense", "amount":200, "description":"Groceries"} ]
+
+
+def add_record(type, amount, category):
+    # This function is to record the bill to the list
+
+    new_transaction = {"type": type, "amount": amount, "category": category}
+    budget.append(new_transaction)
+    print("Record added:", new_transaction)
+
+
+def get_balance():
+    # This function is to calculate the balance of income and expense
+
+    total_income = 0
+    total_expense = 0
+    # loop through the list to calculate income and expense
+    for item in budget:
+        if item["type"] == "Income":
+            total_income += item["amount"]
+        else:
+            # if not income,then is expenses
+            total_expense += item["amount"]
+
+    balance = total_income + total_expense
+
+    print("--------------------")
+    print("Total Income= RM", total_income)
+    print("Total Expense= RM", total_expense)
+    print("Balance: RM", balance)
+    print("--------------------")
+
+
+
