@@ -1,0 +1,386 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import csv
+import os
+import datetime as dt
+
+# =============================================================================
+# PART 1: BACKEND LOGIC (Classes & Functions)
+# =============================================================================
+
+# --- Class Definitions ---
+class Transaction:
+    def __init__(self, date, amount, category, account, description, payment_mode):
+        self.date = date
+        self.description = description
+        self.category = category
+        self.account = account
+        self.payment_mode = payment_mode  # Matches CSV header
+        
+        # [RUBRIC: Encapsulation] Amount is private
+        try:
+            self.__amount = float(amount)
+            if self.__amount < 0:
+                self.__amount = 0.0
+        except ValueError:
+            self.__amount = 0.0
+
+    @property
+    def amount(self):
+        return self.__amount
+
+
+class Income(Transaction):
+    def __init__(self, date, amount, category, account, description, payment_mode):
+        super().__init__(date, amount, category, account, description, payment_mode)
+        self.type = "Income"
+
+
+class Expense(Transaction):
+    def __init__(self, date, amount, category, account, description, payment_mode):
+        super().__init__(date, amount, category, account, description, payment_mode)
+        self.type = "Expense"
+
+
+# --- Global Variables ---
+budget_list = []
+FILENAME = "budget_data.csv"
+
+# [RUBRIC: Collections] Tuple used for headers
+CSV_HEADER = (
+    "Date",
+    "type",          # Record Type (Income/Expense)
+    "amount",
+    "category", 
+    "account",
+    "description",
+    "payment_mode",  # Payment Method (Card, Cash, etc)
+)
+
+
+# --- Backend Functions ---
+
+def validate_amount(amount_str):
+    """
+    [RUBRIC: Loops] Uses a 'while' loop to ensure amount is valid.
+    """
+    valid = False
+    value = 0.0
+
+    while not valid:
+        try:
+            value = float(amount_str)
+            if value < 0:
+                print("Amount cannot be negative.")
+                break
+            valid = True
+        except ValueError:
+            print("Invalid number format.")
+            break
+
+    return value
+
+
+def save_data_csv():
+    """Saves the current budget_list to CSV file."""
+    try:
+        with open(FILENAME, "w", newline="", encoding="utf-8") as file:
+            writer = csv.DictWriter(file, fieldnames=CSV_HEADER)
+            writer.writeheader()
+
+            for item in budget_list:
+                row = {
+                    "Date": item.date,
+                    "type": item.type,
+                    "amount": "{:.2f}".format(item.amount),
+                    "category": item.category,
+                    "account": item.account,
+                    "description": item.description,
+                    "payment_mode": item.payment_mode,
+                }
+                writer.writerow(row)
+        print(f"Data saved successfully: {len(budget_list)}")
+        return
+    except Exception as e:
+        print(f"Unsuccessfully Save: {e}")
+        return
+
+
+def load_from_csv():
+    """Loads data from CSV file into budget_list."""
+    global budget_list
+    budget_list = [] # Clearing list here is CORRECT to avoid duplicates on reload
+
+    if not os.path.exists(FILENAME):
+        return
+
+    try:
+        with open(FILENAME, "r", encoding="utf-8") as file:
+            reader = csv.DictReader(file)
+
+            for row in reader:
+                # Robust loading: handle missing keys safely and handle case sensitivity
+                # Try 'Date' (Header format) first, then 'date' (Legacy format)
+                date = row.get("Date") or row.get("date")
+                type_str = row.get("type") or row.get("Type")
+                
+                # [FIX] Check for missing type to prevent phantom records
+                if not type_str:
+                    continue
+
+                try:
+                    # Handle 'amount' or 'Amount'
+                    amt_val = row.get("amount") or row.get("Amount") or 0
+                    amount = float(amt_val)
+                except ValueError:
+                    amount = 0.0
+                    
+                cat = row.get("category") or row.get("Category") or "-"
+                acc = row.get("account") or row.get("Account") or "-"
+                desc = row.get("description") or row.get("Description") or "-"
+                pm = row.get("payment_mode") or row.get("Payment_Mode") or "-"
+
+                # [FIX] Use capitalize() so "income" (lowercase) is correctly read as Income
+                if type_str.capitalize() == "Income":
+                    obj = Income(date, amount, cat, acc, desc, pm)
+                else:
+                    obj = Expense(date, amount, cat, acc, desc, pm)
+
+                budget_list.append(obj)
+            
+            print("Successful Load")
+            return True
+
+    except Exception as e:
+        print("Unsuccessful Load", str(e))
+        return False
+
+
+def add_record(record_type, amount, category, account, description, payment_mode):
+    """Creates a new record and saves it."""
+    current_date = dt.datetime.now().strftime("%Y-%m-%d")
+
+    if record_type.capitalize() == "Income":
+        new_transaction = Income(
+            current_date, amount, category, account, description, payment_mode
+        )
+    else:
+        new_transaction = Expense(
+            current_date, amount, category, account, description, payment_mode
+        )
+
+    budget_list.append(new_transaction)
+    save_data_csv()
+    print(f"Record added: {record_type} - {description} - RM {amount}")
+
+
+def get_balance_summary():
+    """Calculates totals and returns a dictionary."""
+    total_income = 0
+    total_expense = 0
+    
+    # [RUBRIC: Loop] Loop through list to calculate totals
+    for item in budget_list:
+        if item.type == "Income":
+            total_income += item.amount
+        else:
+            total_expense += item.amount
+
+    balance = total_income - total_expense
+    return {"income": total_income, "expense": total_expense, "balance": balance}
+
+
+# =============================================================================
+# PART 2: FRONTEND UI (GUI)
+# =============================================================================
+
+def refresh_table():
+    """Updates the UI table with data from budget_list."""
+    # Clear current items in the table
+    for item in tree.get_children():
+        tree.delete(item)
+    
+    # Load data from backend list
+    for item in budget_list:
+        tree.insert("", "end", values=(
+            item.date, 
+            item.type, 
+            f"{item.amount:.2f}", 
+            item.category, 
+            item.account, 
+            item.description, 
+            item.payment_mode
+        ))
+    
+    # Update status bar
+    summary = get_balance_summary()
+    status_label.config(text=f"Balance: RM {summary['balance']:.2f}")
+
+
+def add_income_ui():
+    """Handler for Add Income button."""
+    try:
+        amt = float(income_amount.get())
+        if amt < 0: raise ValueError("Negative amount")
+    except:
+        messagebox.showerror("Error", "Invalid income amount!")
+        return
+
+    # Call Backend Function directly
+    add_record(
+        "Income", 
+        amt, 
+        income_category.get(), 
+        income_account.get(), 
+        income_note.get(), 
+        "-" # Payment mode not needed for income
+    )
+    
+    refresh_table()
+    messagebox.showinfo("Success", "Income Added!")
+    
+    # Clear inputs
+    income_amount.delete(0, tk.END)
+    income_category.delete(0, tk.END)
+    income_account.delete(0, tk.END)
+    income_note.delete(0, tk.END)
+
+
+def add_expense_ui():
+    """Handler for Add Expense button."""
+    try:
+        amt = float(expense_amount.get())
+        if amt < 0: raise ValueError("Negative amount")
+    except:
+        messagebox.showerror("Error", "Invalid expense amount!")
+        return
+
+    # Call Backend Function directly
+    add_record(
+        "Expense", 
+        amt, 
+        expense_category.get(), 
+        expense_account.get(), 
+        expense_note.get(), 
+        transaction_type.get()
+    )
+
+    refresh_table()
+    messagebox.showinfo("Success", "Expense Added!")
+
+    # Clear inputs
+    expense_amount.delete(0, tk.END)
+    expense_category.delete(0, tk.END)
+    expense_account.delete(0, tk.END)
+    expense_note.delete(0, tk.END)
+
+
+def show_totals():
+    """Handler for Show Totals menu item."""
+    summary = get_balance_summary()
+    msg = (f"Total Income:  RM {summary['income']:.2f}\n"
+           f"Total Expense: RM {summary['expense']:.2f}\n"
+           f"--------------------------\n"
+           f"Net Balance:   RM {summary['balance']:.2f}")
+    messagebox.showinfo("Financial Summary", msg)
+
+
+# --- Main Application Setup ---
+
+if __name__ == "__main__":
+    # 1. Load Data
+    load_from_csv()
+
+    # 2. Setup Window
+    root = tk.Tk()
+    root.title("Personal Budget Planner")
+    root.geometry("900x700")
+
+    # 3. Setup Menu Bar
+    menu_bar = tk.Menu(root)
+    root.config(menu=menu_bar)
+    file_menu = tk.Menu(menu_bar, tearoff=0)
+    menu_bar.add_cascade(label="File", menu=file_menu)
+    file_menu.add_command(label="Show Totals", command=show_totals)
+    file_menu.add_separator()
+    file_menu.add_command(label="Exit", command=root.quit)
+
+    # Helper for Section Titles
+    def section_title(text):
+        label = tk.Label(root, text=text, font=("Arial", 14, "bold"), fg="#333")
+        label.pack(anchor="w", padx=20, pady=(15, 5))
+
+    # --- Income Section ---
+    section_title("Income Entry")
+    income_frame = tk.Frame(root, bg="#e8f5e9", bd=1, relief="solid")
+    income_frame.pack(fill="x", padx=20, pady=5)
+
+    tk.Label(income_frame, text="Amount (RM)", bg="#e8f5e9").grid(row=0, column=0, padx=5, pady=5)
+    income_amount = tk.Entry(income_frame)
+    income_amount.grid(row=0, column=1, padx=5, pady=5)
+
+    tk.Label(income_frame, text="Category", bg="#e8f5e9").grid(row=0, column=2, padx=5, pady=5)
+    income_category = tk.Entry(income_frame)
+    income_category.grid(row=0, column=3, padx=5, pady=5)
+
+    tk.Label(income_frame, text="Account", bg="#e8f5e9").grid(row=1, column=0, padx=5, pady=5)
+    income_account = tk.Entry(income_frame)
+    income_account.grid(row=1, column=1, padx=5, pady=5)
+
+    tk.Label(income_frame, text="Note", bg="#e8f5e9").grid(row=1, column=2, padx=5, pady=5)
+    income_note = tk.Entry(income_frame, width=30)
+    income_note.grid(row=1, column=3, padx=5, pady=5)
+
+    tk.Button(income_frame, text="Add Income", bg="#4caf50", fg="white", command=add_income_ui).grid(row=0, column=4, rowspan=2, padx=20)
+
+    # --- Expense Section ---
+    section_title("Expense Entry")
+    expense_frame = tk.Frame(root, bg="#ffebee", bd=1, relief="solid")
+    expense_frame.pack(fill="x", padx=20, pady=5)
+
+    tk.Label(expense_frame, text="Amount (RM)", bg="#ffebee").grid(row=0, column=0, padx=5, pady=5)
+    expense_amount = tk.Entry(expense_frame)
+    expense_amount.grid(row=0, column=1, padx=5, pady=5)
+
+    tk.Label(expense_frame, text="Category", bg="#ffebee").grid(row=0, column=2, padx=5, pady=5)
+    expense_category = tk.Entry(expense_frame)
+    expense_category.grid(row=0, column=3, padx=5, pady=5)
+
+    tk.Label(expense_frame, text="Account", bg="#ffebee").grid(row=1, column=0, padx=5, pady=5)
+    expense_account = tk.Entry(expense_frame)
+    expense_account.grid(row=1, column=1, padx=5, pady=5)
+
+    tk.Label(expense_frame, text="Note", bg="#ffebee").grid(row=1, column=2, padx=5, pady=5)
+    expense_note = tk.Entry(expense_frame, width=30)
+    expense_note.grid(row=1, column=3, padx=5, pady=5)
+
+    tk.Label(expense_frame, text="Type", bg="#ffebee").grid(row=2, column=0, padx=5, pady=5)
+    transaction_type = ttk.Combobox(expense_frame, values=["Card", "TNG", "Cash", "QR Pay"])
+    transaction_type.grid(row=2, column=1, padx=5, pady=5)
+    transaction_type.set("Card")
+
+    tk.Button(expense_frame, text="Add Expense", bg="#f44336", fg="white", command=add_expense_ui).grid(row=0, column=4, rowspan=3, padx=20)
+
+    # --- Summary & Table Section ---
+    section_title("Transaction History")
+
+    # Balance Label
+    status_label = tk.Label(root, text="Balance: RM 0.00", font=("Arial", 12, "bold"), fg="blue")
+    status_label.pack(anchor="w", padx=20)
+
+    # Treeview (Table)
+    columns = ("Date", "Type", "Amount", "Category", "Account", "Note", "Mode")
+    tree = ttk.Treeview(root, columns=columns, show="headings", height=10)
+
+    # Define Headings
+    for col in columns:
+        tree.heading(col, text=col)
+        tree.column(col, width=100)
+
+    tree.pack(fill="both", expand=True, padx=20, pady=10)
+
+    # Load initial data
+    refresh_table()
+
+    # Start App
+    root.mainloop()
