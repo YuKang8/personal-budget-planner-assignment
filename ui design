@@ -1,1 +1,232 @@
+# ui
+# -----------
 
+
+def refresh_table():
+    """Updates the UI table with data from budget_list."""
+    # Clear current items in the table
+    for item in tree.get_children():
+        tree.delete(item)
+
+    # Load data from backend list
+    for item in budget_list:
+        tree.insert(
+            "",
+            "end",
+            values=(
+                item.date,
+                item.type,
+                f"{item.amount:.2f}",
+                item.category,
+                item.account,
+                item.description,
+                item.payment_mode,
+            ),
+        )
+
+    # Update status bar
+    summary = get_balance_summary()
+    status_label.config(text=f"Balance: RM {summary['balance']:.2f}")
+
+
+def add_income_ui():
+    """Handler for Add Income button."""
+    try:
+        amt = float(income_amount.get())
+        if amt < 0:
+            raise ValueError("Negative amount")
+    except:
+        messagebox.showerror("Error", "Invalid income amount!")
+        return
+
+    # Call Backend Function directly
+    add_record(
+        "Income",
+        amt,
+        income_category.get(),
+        income_account.get(),
+        income_note.get(),
+        "-",  # Payment mode not needed for income
+    )
+
+    refresh_table()
+    messagebox.showinfo("Success", "Income Added!")
+
+    # Clear inputs
+    income_amount.delete(0, tk.END)
+    income_category.delete(0, tk.END)
+    income_account.delete(0, tk.END)
+    income_note.delete(0, tk.END)
+
+
+def add_expense_ui():
+    """Handler for Add Expense button."""
+    try:
+        amt = float(expense_amount.get())
+        if amt < 0:
+            raise ValueError("Negative amount")
+    except:
+        messagebox.showerror("Error", "Invalid expense amount!")
+        return
+
+    # Call Backend Function directly
+    add_record(
+        "Expense",
+        amt,
+        expense_category.get(),
+        expense_account.get(),
+        expense_note.get(),
+        transaction_type.get(),
+    )
+
+    refresh_table()
+    messagebox.showinfo("Success", "Expense Added!")
+
+    # Clear inputs
+    expense_amount.delete(0, tk.END)
+    expense_category.delete(0, tk.END)
+    expense_account.delete(0, tk.END)
+    expense_note.delete(0, tk.END)
+
+
+def show_totals():
+    """Handler for Show Totals menu item."""
+    summary = get_balance_summary()
+    msg = (
+        f"Total Income:  RM {summary['income']:.2f}\n"
+        f"Total Expense: RM {summary['expense']:.2f}\n"
+        f"--------------------------\n"
+        f"Net Balance:   RM {summary['balance']:.2f}"
+    )
+    messagebox.showinfo("Financial Summary", msg)
+
+
+# --- Main Application Setup ---
+
+if __name__ == "__main__":
+    # 1. Load Data
+    load_from_csv()
+
+    # 2. Setup Window
+    root = tk.Tk()
+    root.title("Personal Budget Planner")
+    root.geometry("900x700")
+
+    # 3. Setup Menu Bar
+    menu_bar = tk.Menu(root)
+    root.config(menu=menu_bar)
+    file_menu = tk.Menu(menu_bar, tearoff=0)
+    menu_bar.add_cascade(label="File", menu=file_menu)
+    file_menu.add_command(label="Show Totals", command=show_totals)
+    file_menu.add_separator()
+    file_menu.add_command(label="Exit", command=root.quit)
+
+    # Helper for Section Titles
+    def section_title(text):
+        label = tk.Label(root, text=text, font=("Arial", 14, "bold"), fg="#333")
+        label.pack(anchor="w", padx=20, pady=(15, 5))
+
+    # --- Income Section ---
+    section_title("Income Entry")
+    income_frame = tk.Frame(root, bg="#e8f5e9", bd=1, relief="solid")
+    income_frame.pack(fill="x", padx=20, pady=5)
+
+    tk.Label(income_frame, text="Amount (RM)", bg="#e8f5e9").grid(
+        row=0, column=0, padx=5, pady=5
+    )
+    income_amount = tk.Entry(income_frame)
+    income_amount.grid(row=0, column=1, padx=5, pady=5)
+
+    tk.Label(income_frame, text="Category", bg="#e8f5e9").grid(
+        row=0, column=2, padx=5, pady=5
+    )
+    income_category = tk.Entry(income_frame)
+    income_category.grid(row=0, column=3, padx=5, pady=5)
+
+    tk.Label(income_frame, text="Account", bg="#e8f5e9").grid(
+        row=1, column=0, padx=5, pady=5
+    )
+    income_account = tk.Entry(income_frame)
+    income_account.grid(row=1, column=1, padx=5, pady=5)
+
+    tk.Label(income_frame, text="Note", bg="#e8f5e9").grid(
+        row=1, column=2, padx=5, pady=5
+    )
+    income_note = tk.Entry(income_frame, width=30)
+    income_note.grid(row=1, column=3, padx=5, pady=5)
+
+    tk.Button(
+        income_frame, text="Add Income", bg="#4caf50", fg="white", command=add_income_ui
+    ).grid(row=0, column=4, rowspan=2, padx=20)
+
+    # --- Expense Section ---
+    section_title("Expense Entry")
+    expense_frame = tk.Frame(root, bg="#ffebee", bd=1, relief="solid")
+    expense_frame.pack(fill="x", padx=20, pady=5)
+
+    tk.Label(expense_frame, text="Amount (RM)", bg="#ffebee").grid(
+        row=0, column=0, padx=5, pady=5
+    )
+    expense_amount = tk.Entry(expense_frame)
+    expense_amount.grid(row=0, column=1, padx=5, pady=5)
+
+    tk.Label(expense_frame, text="Category", bg="#ffebee").grid(
+        row=0, column=2, padx=5, pady=5
+    )
+    expense_category = tk.Entry(expense_frame)
+    expense_category.grid(row=0, column=3, padx=5, pady=5)
+
+    tk.Label(expense_frame, text="Account", bg="#ffebee").grid(
+        row=1, column=0, padx=5, pady=5
+    )
+    expense_account = tk.Entry(expense_frame)
+    expense_account.grid(row=1, column=1, padx=5, pady=5)
+
+    tk.Label(expense_frame, text="Note", bg="#ffebee").grid(
+        row=1, column=2, padx=5, pady=5
+    )
+    expense_note = tk.Entry(expense_frame, width=30)
+    expense_note.grid(row=1, column=3, padx=5, pady=5)
+
+    tk.Label(expense_frame, text="Type", bg="#ffebee").grid(
+        row=2, column=0, padx=5, pady=5
+    )
+    transaction_type = ttk.Combobox(
+        expense_frame, values=["Card", "TNG", "Cash", "QR Pay"]
+    )
+    transaction_type.grid(row=2, column=1, padx=5, pady=5)
+    transaction_type.set("Card")
+
+    tk.Button(
+        expense_frame,
+        text="Add Expense",
+        bg="#f44336",
+        fg="white",
+        command=add_expense_ui,
+    ).grid(row=0, column=4, rowspan=3, padx=20)
+
+    # --- Summary & Table Section ---
+    section_title("Transaction History")
+
+    # Balance Label
+    status_label = tk.Label(
+        root, text="Balance: RM 0.00", font=("Arial", 12, "bold"), fg="blue"
+    )
+    status_label.pack(anchor="w", padx=20)
+
+    # Treeview (Table)
+    columns = ("Date", "Type", "Amount", "Category", "Account", "Note", "Mode")
+    tree = ttk.Treeview(root, columns=columns, show="headings", height=10)
+
+    # Define Headings
+    for col in columns:
+        tree.heading(col, text=col)
+        tree.column(col, width=100)
+
+    tree.pack(fill="both", expand=True, padx=20, pady=10)
+
+    # Load initial data
+    refresh_table()
+
+    # Start App
+    root.main()
